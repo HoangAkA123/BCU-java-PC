@@ -5,6 +5,8 @@ import common.CommonStatic.BattleConst;
 import common.battle.StageBasis;
 import common.battle.attack.*;
 import common.battle.data.*;
+import common.battle.extension.BattleExtension.Stacking;
+import common.battle.extension.BattleExtensions;
 import common.pack.Identifier;
 import common.pack.UserProfile;
 import common.system.P;
@@ -217,6 +219,10 @@ public abstract class Entity extends AbEntity {
 				}
 			}
 
+			if (e.extensions != null) {
+				g.setTransform(at);
+				e.extensions.draw(g, p.x, p.y, siz);
+			}
 			g.delete(at);
 		}
 
@@ -762,6 +768,8 @@ public abstract class Entity extends AbEntity {
 			preID = 0;
 			preTime = pres[0];
 			e.anim.setAnim(UType.ATK, true);
+			if (e.extensions != null)
+				e.extensions.attackStart();
 		}
 
 		private void stopAtk() {
@@ -1310,6 +1318,35 @@ public abstract class Entity extends AbEntity {
 	 */
 	public final MaskEntity data;
 
+	private volatile BattleExtensions.Runtime extensions;
+
+	@Override
+	public void added(int direction, float position) {
+		super.added(direction, position);
+		if (data instanceof CustomEntity && !((CustomEntity) data).extensionSettings().isEmpty()) {
+			if (extensions == null)
+				extensions = new BattleExtensions.Runtime(this);
+			extensions.start();
+		}
+	}
+
+	public boolean applyBattleEffect(Entity source, String id, int ticks, Stacking stacking, String configuration) {
+		if (dead || health <= 0 || kbTime == -1)
+			return false;
+		if (extensions == null)
+			extensions = new BattleExtensions.Runtime(this);
+		return extensions.apply(source, id, ticks, stacking, configuration);
+	}
+
+	public void removeBattleEffect(String id) {
+		if (extensions != null)
+			extensions.remove(id);
+	}
+
+	public void queueExtensionDamage(long amount) {
+		damage += Math.max(-maxH, Math.min(maxH, amount));
+	}
+
 	/**
 	 * group, used for search
 	 */
@@ -1769,6 +1806,12 @@ public abstract class Entity extends AbEntity {
 		else if (basis.activeGuard != 1)
 			CommonStatic.setSE(SE_HIT_BASE);
 
+		Entity source = atk.attacker;
+		if (source != null && source.extensions != null)
+			dmg = source.extensions.modify(atk, this, dmg, true);
+		if (extensions != null)
+			dmg = extensions.modify(atk, this, dmg, false);
+
 		damage += dmg;
 		zx.damaged(atk);
 
@@ -1869,6 +1912,11 @@ public abstract class Entity extends AbEntity {
 
 		if (proc)
 			processProcs(atk);
+
+		if (extensions != null)
+			extensions.accepted(atk, this, dmg, false);
+		if (source != null && source.extensions != null)
+			source.extensions.accepted(atk, this, dmg, true);
 
 		return true;
 	}
@@ -2192,13 +2240,20 @@ public abstract class Entity extends AbEntity {
 		if (kbTime == -1)
 			return;
 		kbTime = -1;
+		if (extensions != null)
+			extensions.death();
 		atkm.stopAtk();
 		anim.kill();
 		basis.checkGuard();
 		if (atk == KillMode.NORMAL)
-			for (AttackAb attack : lastKilledBy)
-				if (attack.attacker != null)
-					attack.attacker.killCount++;
+			for (AttackAb attack : lastKilledBy) {
+				Entity attacker = attack.attacker;
+				if (attacker != null) {
+					attacker.killCount++;
+					if (attacker.extensions != null)
+						attacker.extensions.killed(attack, this);
+				}
+			}
 		weaks.list.clear();
 		status[P_WEAK] = new int[PROC_WIDTH];
 		status[P_STOP] = new int[PROC_WIDTH];
@@ -2434,6 +2489,8 @@ public abstract class Entity extends AbEntity {
 			waitTime--;
 
 		updateProc();
+		if (extensions != null && !dead && health > 0 && kbTime != -1)
+			extensions.tick();
 		barrier.update();
 
 		if (kbTime > 0)

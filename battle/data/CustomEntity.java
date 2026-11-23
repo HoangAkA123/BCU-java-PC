@@ -14,11 +14,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.TreeMap;
 
 @JsonClass(noTag = NoTag.LOAD)
 public abstract class CustomEntity extends DataEntity {
 
 	public static int SPECIAL_ATTACK_COUNT = 7;
+
+	@JsonField(generic = {String.class, String.class}, tag = "extensions")
+	private TreeMap<String, String> extensions = new TreeMap<>();
+
+	public TreeMap<String, String> extensionSettings() {
+		if (extensions == null)
+			extensions = new TreeMap<>();
+		return extensions;
+	}
 
 	@JsonField(gen = GenType.GEN)
 	public AtkDataModel rev, res, bur, resu, revi, glas, cntr; // special attacks
@@ -196,6 +206,7 @@ public abstract class CustomEntity extends DataEntity {
 
 	public void importData(MaskEntity src) {
 		hp = src.getHp();
+		extensions = src instanceof CustomEntity ? new TreeMap<>(((CustomEntity) src).extensionSettings()) : new TreeMap<>();
 		hb = src.getHb();
 		speed = src.getSpeed();
 		range = src.getRange();
