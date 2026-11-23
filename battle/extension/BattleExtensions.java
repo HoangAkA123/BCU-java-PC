@@ -82,6 +82,29 @@ public final class BattleExtensions {
 			return true;
 		}
 
+		public boolean apply(Entity source, String id, Behavior behavior, int ticks, Stacking stacking) {
+			if (behavior == null || id == null || !id.matches("[a-z][a-z0-9_.-]{0,79}") || ticks <= 0)
+				return false;
+			if (stacking == Stacking.REFRESH) {
+				for (Instance instance : effects)
+					if (instance.context.id.equals(id)) {
+						instance.ticks = Math.max(instance.ticks, ticks);
+						return true;
+					}
+			}
+			if (stacking != Stacking.REPLACE && effects.size() >= MAX_EFFECTS)
+				return false;
+			if (stacking == Stacking.REPLACE)
+				remove(id);
+			if (effects.size() >= MAX_EFFECTS)
+				return false;
+			Instance instance = new Instance(new Context(owner, source, id), behavior, ticks);
+			effects.add(instance);
+			instance.call(value -> value.onStart(instance.context));
+			updateVisuals();
+			return true;
+		}
+
 		public void remove(String id) {
 			List<Instance> removed = new ArrayList<>();
 			for (Iterator<Instance> iterator = effects.iterator(); iterator.hasNext();) {
@@ -159,6 +182,21 @@ public final class BattleExtensions {
 						behavior.onDamaged(hit, damage);
 				});
 			}
+		}
+
+		public boolean allowInterruption(InterruptionType type, float distance) {
+			boolean allowed = true;
+			for (Instance instance : active()) {
+				if (instance.disabled)
+					continue;
+				try {
+					if (!instance.behavior.allowInterruption(new Interruption(instance.context, type, distance)))
+						allowed = false;
+				} catch (RuntimeException | LinkageError failure) {
+					instance.disable(failure);
+				}
+			}
+			return allowed;
 		}
 
 		public void draw(FakeGraphics graphics, float x, float y, float scale) {

@@ -5,6 +5,7 @@ import common.CommonStatic.BattleConst;
 import common.battle.StageBasis;
 import common.battle.attack.*;
 import common.battle.data.*;
+import common.battle.extension.BattleExtension;
 import common.battle.extension.BattleExtension.Stacking;
 import common.battle.extension.BattleExtensions;
 import common.pack.Identifier;
@@ -882,6 +883,8 @@ public abstract class Entity extends AbEntity {
 		}
 
 		private void kbmove(float mov) {
+			if (!e.allowExtensionInterruption(kbType, mov))
+				return;
 			float lim = e.getLim();
 			e.pos -= Math.min(mov, lim) * e.dire;
 		}
@@ -1320,6 +1323,35 @@ public abstract class Entity extends AbEntity {
 
 	private volatile BattleExtensions.Runtime extensions;
 
+	public void cancelExtensionDisplacement() {
+		kb.tempKBtype = -1;
+		kb.kbDis = 0;
+		kb.initPos = pos;
+	}
+
+	private boolean allowExtensionInterruption(int type, float distance) {
+		if (extensions == null)
+			return true;
+		BattleExtension.InterruptionType event;
+		switch (type) {
+		case INT_HB:
+			event = BattleExtension.InterruptionType.DAMAGE_KNOCKBACK;
+			break;
+		case INT_SW:
+			event = BattleExtension.InterruptionType.BOSS_WAVE;
+			break;
+		case INT_ASS:
+			event = BattleExtension.InterruptionType.SNIPER;
+			break;
+		case INT_WARP:
+			event = BattleExtension.InterruptionType.WARP;
+			break;
+		default:
+			event = BattleExtension.InterruptionType.KNOCKBACK;
+		}
+		return extensions.allowInterruption(event, distance);
+	}
+
 	@Override
 	public void added(int direction, float position) {
 		super.added(direction, position);
@@ -1336,6 +1368,14 @@ public abstract class Entity extends AbEntity {
 		if (extensions == null)
 			extensions = new BattleExtensions.Runtime(this);
 		return extensions.apply(source, id, ticks, stacking, configuration);
+	}
+
+	public boolean applyBattleEffect(Entity source, String id, BattleExtension.Behavior behavior, int ticks, Stacking stacking) {
+		if (dead || health <= 0 || kbTime == -1)
+			return false;
+		if (extensions == null)
+			extensions = new BattleExtensions.Runtime(this);
+		return extensions.apply(source, id, behavior, ticks, stacking);
 	}
 
 	public void removeBattleEffect(String id) {
@@ -2056,10 +2096,10 @@ public abstract class Entity extends AbEntity {
 			float rst = getResistValue(atk, "IMUKB", getProc().IMUKB.mult);
 
 			if (rst > 0f) {
-				status[P_KB][0] = atkProc.KB.time;
-
-				interrupt(P_KB, atkProc.KB.dis * dist * rst);
-				basis.scoreActivated(SCORE_KB, dire, trait);
+				if (tryInterrupt(P_KB, atkProc.KB.dis * dist * rst)) {
+					status[P_KB][0] = atkProc.KB.time;
+					basis.scoreActivated(SCORE_KB, dire, trait);
+				}
 			} else
 				anim.getEff(INV);
 		}
@@ -2074,16 +2114,17 @@ public abstract class Entity extends AbEntity {
 			if (getProc().IMUWARP.mult < 100) {
 				Proc.WARP warp = atkProc.WARP;
 
-				interrupt(INT_WARP, warp.dis_0 + (int) (basis.r.nextFloat() * (warp.dis_1 - warp.dis_0)));
+				float distance = warp.dis_0 + (int) (basis.r.nextFloat() * (warp.dis_1 - warp.dis_0));
+				if (tryInterrupt(INT_WARP, distance)) {
+					EffAnim<WarpEff> e = effas().A_W;
 
-				EffAnim<WarpEff> e = effas().A_W;
+					int len = e.len(WarpEff.ENTER) + e.len(WarpEff.EXIT);
+					int val = (int) (warp.time * time);
+					float rst = getResistValue(atk, "IMUWARP", getProc().IMUWARP.mult);
+					val = (int) (val * rst);
 
-				int len = e.len(WarpEff.ENTER) + e.len(WarpEff.EXIT);
-				int val = (int) (warp.time * time);
-				float rst = getResistValue(atk, "IMUWARP", getProc().IMUWARP.mult);
-				val = (int) (val * rst);
-
-				status[P_WARP][0] = val + len;
+					status[P_WARP][0] = val + len;
+				}
 			} else
 				anim.getEff(INVWARP);
 
@@ -2219,10 +2260,15 @@ public abstract class Entity extends AbEntity {
 	 * receive an interrupt
 	 */
 	public void interrupt(int t, float d) {
-		if(isBase && health <= 0)
-			return;
+		tryInterrupt(t, d);
+	}
+
+	public boolean tryInterrupt(int t, float d) {
+		if (!allowExtensionInterruption(t, d) || (isBase && health <= 0))
+			return false;
 
 		kb.interrupt(t, d);
+		return true;
 	}
 
 	@Override
@@ -2282,8 +2328,9 @@ public abstract class Entity extends AbEntity {
 		if (status[P_ARMOR][0] > 0) {
 			damage = (long) (damage * (100 + status[P_ARMOR][1]) / 100.0);
 		}
+		boolean blockedFinalKnockback = false;
 		if (!isBase && damage > 0 && kbTime <= 0 && kbTime != -1 && (ext <= damage * hb || health < damage))
-			interrupt(INT_HB, KB_DIS[INT_HB]);
+			blockedFinalKnockback = !tryInterrupt(INT_HB, KB_DIS[INT_HB]);
 		if (damage > 0 && isBase && basis.activeGuard == 1) {
 			anim.getEff(GUARD_HOLD);
 		} else {
@@ -2325,8 +2372,14 @@ public abstract class Entity extends AbEntity {
 			tokens.get(i).model.invokeLater(tokens.get(i), this);
 		tokens.clear();
 
-		if(isBase && health <= 0)
-			kbTime = 1;
+		if (health <= 0) {
+			if (isBase) {
+				kbTime = 1;
+			} else if (blockedFinalKnockback && kbTime <= 0 && kbTime != -1) {
+				// Use BCU's normal final-hit death/revive path at the current position.
+				kb.interrupt(INT_HB, 0);
+			}
+		}
 
 		kb.doInterrupt();
 

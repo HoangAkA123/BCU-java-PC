@@ -17,6 +17,7 @@ public interface BattleExtension {
 	enum Kind { ABILITY, EFFECT }
 	enum Side { BOTH, CAT, ENEMY }
 	enum Stacking { REFRESH, REPLACE, STACK }
+	enum InterruptionType { KNOCKBACK, DAMAGE_KNOCKBACK, BOSS_WAVE, SNIPER, WARP }
 
 	String id();
 	String name();
@@ -39,6 +40,7 @@ public interface BattleExtension {
 		default void onKill(Hit hit) {}
 		default void onEnd(Context context) {}
 		default void onRender(Visual visual) {}
+		default boolean allowInterruption(Interruption interruption) { return true; }
 	}
 
 	final class Parameter {
@@ -141,6 +143,7 @@ public interface BattleExtension {
 		public boolean chance(double percent) { return self.basis.r.nextFloat() * 100 < percent; }
 		public void heal(long amount) { self.queueExtensionDamage(-Math.max(0, amount)); }
 		public void damage(long amount) { self.queueExtensionDamage(Math.max(0, amount)); }
+		public void cancelDisplacement(Entity target) { target.cancelExtensionDisplacement(); }
 
 		public boolean applyEffect(Entity target, String effectId, int ticks, Stacking stacking) {
 			return applyEffect(target, effectId, ticks, stacking, null);
@@ -151,8 +154,25 @@ public interface BattleExtension {
 			return target.applyBattleEffect(self, effectId, ticks, stacking, settings);
 		}
 
+		/** Applies a temporary behavior created entirely by the calling plugin. */
+		public boolean applyEffect(Entity target, String instanceId, Behavior behavior, int ticks, Stacking stacking) {
+			return target.applyBattleEffect(self, instanceId, behavior, ticks, stacking);
+		}
+
 		public void removeEffect(Entity target, String effectId) {
 			target.removeBattleEffect(effectId);
+		}
+	}
+
+	final class Interruption {
+		public final Context context;
+		public final InterruptionType type;
+		public final float distance;
+
+		Interruption(Context context, InterruptionType type, float distance) {
+			this.context = context;
+			this.type = type;
+			this.distance = distance;
 		}
 	}
 
