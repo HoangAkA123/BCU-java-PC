@@ -86,6 +86,7 @@ public class StageBasis extends BattleObj {
 	 */
 	public float midH = -1, battleHeight = -1;
 	private final List<AttackAb> la = new ArrayList<>();
+	private final List<AttackAb> extensionAttacks = new ArrayList<>();
 	private boolean lethal = false;
 	public int themeTime;
 	private Identifier<Background> theme = null;
@@ -292,6 +293,17 @@ public class StageBasis extends BattleObj {
 		if (a == null)
 			return;
 		la.add(a);
+	}
+
+	/** Plugin attacks enter the next capture pass, never mutate an active attack iteration. */
+	public void queueExtensionAttack(AttackAb attack) {
+		if (extensionAttacks.size() >= 256) throw new IllegalStateException("Too many plugin attacks in one frame");
+		extensionAttacks.add(attack);
+	}
+
+	private void flushExtensionAttacks() {
+		la.addAll(extensionAttacks);
+		extensionAttacks.clear();
 	}
 
 	/**
@@ -863,6 +875,7 @@ public class StageBasis extends BattleObj {
 			}
 		}
 
+		flushExtensionAttacks();
 		la.forEach(AttackAb::capture);
 		la.forEach(AttackAb::excuse);
 		la.removeIf(a -> a.duration <= 0);
@@ -1086,6 +1099,7 @@ public class StageBasis extends BattleObj {
 				le.get(i).update2();
 		}
 
+		flushExtensionAttacks();
 		la.forEach(AttackAb::capture);
 		la.forEach(AttackAb::excuse);
 		la.removeIf(a -> a.duration <= 0);
@@ -1123,6 +1137,7 @@ public class StageBasis extends BattleObj {
 				le.removeIf(e -> (e.getAbi() & AB_THEMEI) == 0);
 				lw.clear();
 				la.clear();
+				extensionAttacks.clear();
 				tlw.clear();
 				lea.clear();
 				tempe.removeIf(e -> (e.ent.getAbi() & AB_THEMEI) == 0);

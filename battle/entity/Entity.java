@@ -1194,6 +1194,7 @@ public abstract class Entity extends AbEntity {
 			int c = canRevive();
 			if (!tempZK && c > 0) {
 				int[][] status = e.status;
+				long previousHealth = e.health;
 				doRevive(c);
 				// clear state
 				status[P_STOP] = new int[PROC_WIDTH];
@@ -1204,6 +1205,10 @@ public abstract class Entity extends AbEntity {
 				status[P_STRONG] = new int[PROC_WIDTH];
 				status[P_LETHAL] = new int[PROC_WIDTH];
 				status[P_POISON] = new int[PROC_WIDTH];
+				if (e.extensions != null) {
+					e.extensions.healthChanged(previousHealth);
+					e.extensions.revived();
+				}
 				return true;
 			}
 			return false;
@@ -1384,7 +1389,31 @@ public abstract class Entity extends AbEntity {
 	}
 
 	public void queueExtensionDamage(long amount) {
-		damage += Math.max(-maxH, Math.min(maxH, amount));
+		if (dead || kbTime == -1 || health <= 0) return;
+		long delta = Math.max(-maxH, Math.min(maxH, amount));
+		if (delta > 0 && damage > Long.MAX_VALUE - delta) damage = Long.MAX_VALUE;
+		else if (delta < 0 && damage < Long.MIN_VALUE - delta) damage = Long.MIN_VALUE;
+		else damage += delta;
+	}
+
+	public void prepareExtensionAttack(BattleExtension.AttackDraft draft) {
+		if (extensions != null) extensions.prepareAttack(draft);
+	}
+
+	public AtkModelEntity extensionAttackModel() { return aam; }
+	public boolean isExtensionActive() { return health > 0 && !dead && kbTime != -1; }
+
+	public int extensionStatusTime(BattleExtension.Status type) {
+		if (type != BattleExtension.Status.POISON) return status[type.index][0];
+		int remaining = 0;
+		for (POISON poison : pois.list) remaining = Math.max(remaining, poison.time);
+		return remaining;
+	}
+
+	public void clearExtensionStatus(BattleExtension.Status type) {
+		status[type.index] = new int[PROC_WIDTH];
+		if (type == BattleExtension.Status.WEAK) weaks.list.clear();
+		if (type == BattleExtension.Status.POISON) pois.list.clear();
 	}
 
 	/**
@@ -1640,6 +1669,7 @@ public abstract class Entity extends AbEntity {
 	 */
 	@Override
 	public boolean damaged(AttackAb atk) {
+		if (extensions != null && !extensions.allowHit(atk)) return false;
 		damageTaken += atk.atk;
 
 		int dmg = getDamage(atk, atk.atk);
@@ -1982,7 +2012,7 @@ public abstract class Entity extends AbEntity {
 		boolean cannonResist = atk.canon > 0 && getProc().IMUCANNON.exists() && (atk.canon & getProc().IMUCANNON.type) > 0;
 		int dire = data instanceof MaskEnemy ? 1 : -1;
 		int trait = atk.attacker instanceof MaskUnit ? atk.attacker.data.getTraitsRaw().size() : 1;
-		Proc atkProc = atk.getProc();
+		Proc atkProc = extensions == null ? atk.getProc() : extensions.incomingProcs(atk);
 		if (atkProc.POIATK.mult > 0) {
 			int rst = getProc().IMUPOIATK.mult;
 
@@ -2320,6 +2350,7 @@ public abstract class Entity extends AbEntity {
 	@Override
 	public void postUpdate() {
 		regenUpdate();
+		long previousHealth = health;
 
 		int hb = data.getHb();
 		long ext = health * hb % maxH;
@@ -2328,6 +2359,8 @@ public abstract class Entity extends AbEntity {
 		if (status[P_ARMOR][0] > 0) {
 			damage = (long) (damage * (100 + status[P_ARMOR][1]) / 100.0);
 		}
+		if (extensions != null && damage != 0 && health > 0 && kbTime != -1)
+			damage = -extensions.healthChange(-Math.max(-maxH, Math.min(maxH, damage)));
 		boolean blockedFinalKnockback = false;
 		if (!isBase && damage > 0 && kbTime <= 0 && kbTime != -1 && (ext <= damage * hb || health < damage))
 			blockedFinalKnockback = !tryInterrupt(INT_HB, KB_DIS[INT_HB]);
@@ -2367,6 +2400,18 @@ public abstract class Entity extends AbEntity {
 			}
 			status[P_LETHAL][0]++;
 		}
+		if (previousHealth > 0 && health <= 0 && !isBase && kbTime != -1 && extensions != null) {
+			long restored = extensions.reviveHealth();
+			if (restored > 0) {
+				health = restored;
+				cancelExtensionDisplacement();
+				killCounted = false;
+				lastKilledBy.clear();
+				extensions.revived();
+			}
+		}
+		if (extensions != null && health != previousHealth)
+			extensions.healthChanged(previousHealth);
 
 		for (int i = 0; i < tokens.size(); i++)
 			tokens.get(i).model.invokeLater(tokens.get(i), this);
@@ -2648,6 +2693,7 @@ public abstract class Entity extends AbEntity {
 	 * extmov: speedup combo extra distance
 	 */
 	protected void updateMove(float extmov) {
+		float previousPosition = pos;
 		if (moved)
 			skipSpawnBurrow = false;
 		moved = true;
@@ -2681,6 +2727,7 @@ public abstract class Entity extends AbEntity {
 
 		}
 
+		if (extensions != null) pos = previousPosition + extensions.movement(pos - previousPosition);
 		if (kbTime == 0)
 			lastPosition = pos;
 

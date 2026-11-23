@@ -140,7 +140,11 @@ public abstract class AtkModelEntity extends AtkModelAb {
 		Proc proc = Proc.blank();
 		int atk = getAttack(ind, proc);
 		float[] ints = inRange(ind);
-		return new AttackSimple(e, this, atk, e.traits, getAbi(), proc, ints[0], ints[1], e.data.getAtkModel(ind), e.currentLayer, data.isLD(ind) || data.isOmni(ind), ind);
+		common.battle.extension.BattleExtension.AttackDraft draft =
+				new common.battle.extension.BattleExtension.AttackDraft(ind, atk, ints[0], ints[1], proc);
+		e.prepareExtensionAttack(draft);
+		if (draft.cancelled) return null;
+		return new AttackSimple(e, this, draft.damage, e.traits, getAbi(), draft.procs, draft.start, draft.end, e.data.getAtkModel(ind), e.currentLayer, data.isLD(ind) || data.isOmni(ind), ind);
 	}
 
 	/**
@@ -291,6 +295,6 @@ public abstract class AtkModelEntity extends AtkModelAb {
 			proc.MINIVOLC.mult = 20;
 	}
 
-	protected abstract void summon(SUMMON sprc, Entity ent, Object acs, int resist);
+	public abstract void summon(SUMMON sprc, Entity ent, Object acs, int resist);
 
 }
