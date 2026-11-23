@@ -15,6 +15,7 @@ import static utilpc.Interpret.*;
 public class AttList extends JList<String> {
 
 	private static final long serialVersionUID = 1L;
+	ExtensionRows extensionRows;
 
 	protected static void btnDealer(int x, int y, JTG[][] btns, JTG[] orop, int... ord) {
 		int h = 0, or = 0;
@@ -47,6 +48,10 @@ public class AttList extends JList<String> {
 			@Override
 			public Component getListCellRendererComponent(JList<?> l, Object o, int ind, boolean s, boolean f) {
 				JLabel jl = (JLabel) super.getListCellRendererComponent(l, o, ind, s, f);
+				if (extensionRows != null && extensionRows.contains(ind)) {
+					extensionRows.decorate(jl, ind);
+					return jl;
+				}
 				BufferedImage v;
 				if (type == -1) {
 					v = ind < para ? UtilPC.getIcon(0, EABIIND[ind]) : UtilPC.getIcon(1, EPROCIND[ind - para]);

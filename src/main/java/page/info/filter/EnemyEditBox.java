@@ -27,6 +27,7 @@ public class EnemyEditBox extends Page {
 	private final JScrollPane jab = new JScrollPane(abis);
 
 	private boolean changing = false;
+	private ExtensionRows extensions;
 	private final CustomEnemy ce;
 
 	public EnemyEditBox(Page p, UserPack pack, CustomEnemy cen) {
@@ -61,6 +62,7 @@ public class EnemyEditBox extends Page {
 		}
 		for (int area : sel)
 			trait.addSelectionInterval(area, area);
+		extensions.selectSaved();
 		changing = false;
 	}
 
@@ -87,12 +89,14 @@ public class EnemyEditBox extends Page {
 				}
 			} else
 				ce.traits.remove(trait.list.get(i));
+		extensions.saveSelection();
 		getFront().callBack(ans);
 	}
 
 	private void ini() {
 		va.addAll(Arrays.asList(EABI).subList(0, EABIIND.length));
 		trait.setListData();
+		extensions = new ExtensionRows(abis, va, ce, true, editable);
 		abis.setListData(va);
 		int m = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION;
 		trait.setSelectionMode(m);

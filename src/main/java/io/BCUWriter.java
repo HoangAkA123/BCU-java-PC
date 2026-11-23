@@ -289,6 +289,7 @@ public class BCUWriter extends DataIO {
 		jo.addProperty("style_light", MainBCU.light);
 		jo.addProperty("style_nimbus", MainBCU.nimbus);
 		jo.addProperty("author", MainBCU.author);
+		jo.addProperty("animated_background", MainBCU.animatedBackgroundPath);
 		jo.addProperty("rowlayout", CommonStatic.getConfig().twoRow);
 		jo.addProperty("backup_file", CommonStatic.getConfig().backupFile == null ? "None" : CommonStatic.getConfig().backupFile);
 		jo.addProperty("buttonSound", MainBCU.buttonSound);

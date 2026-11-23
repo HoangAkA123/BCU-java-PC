@@ -73,6 +73,13 @@ public abstract class Page extends JPanel implements RetFunc {
 		accumulateJTable(this.getClass());
 	}
 
+	@Override
+	protected void paintComponent(Graphics graphics) {
+		super.paintComponent(graphics);
+		if (MainFrame.getPanel() == this)
+			MainFrame.F.animatedBackground.paint(graphics, this);
+	}
+
 	private void accumulateJTable(Class<?> cls) {
 		Field[] fields = cls.getDeclaredFields();
 

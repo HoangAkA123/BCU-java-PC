@@ -25,6 +25,7 @@ public class UnitEditBox extends Page {
 	private final JScrollPane jab = new JScrollPane(abis);
 
 	private boolean changing = false;
+	private ExtensionRows extensions;
 	private final CustomUnit cu;
 
 	public UnitEditBox(Page p, UserPack pack, CustomUnit cun) {
@@ -56,6 +57,7 @@ public class UnitEditBox extends Page {
 				abis.addSelectionInterval(i, i);
 		for (int area : sel)
 			trait.addSelectionInterval(area, area);
+		extensions.selectSaved();
 		changing = false;
 	}
 
@@ -83,12 +85,14 @@ public class UnitEditBox extends Page {
 				}
 			} else
 				cu.traits.remove(trait.list.get(i));
+		extensions.saveSelection();
 		getFront().callBack(ans);
 	}
 
 	private void ini() {
 		Collections.addAll(va, SABIS);
 		trait.setListData();
+		extensions = new ExtensionRows(abis, va, cu, false, editable);
 		abis.setListData(va);
 		int m = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION;
 		trait.setSelectionMode(m);

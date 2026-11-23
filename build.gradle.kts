@@ -12,6 +12,10 @@ repositories {
     mavenLocal()
     maven {
         url = uri("https://jogamp.org/deployment/maven/")
+        content {
+            includeGroup("org.jogamp.jogl")
+            includeGroup("org.jogamp.gluegen")
+        }
     }
 
     maven {
@@ -23,13 +27,14 @@ repositories {
 sourceSets {
     main {
         resources {
-            srcDirs("src/main/java", "src/main/resources")
-            exclude("**/*.java")
+            setSrcDirs(listOf("src/main/java", "src/main/resources"))
+            exclude("**/*.java", "**/*.kt", "**/.git", "**/.gitignore")
         }
     }
 }
 
 dependencies {
+    implementation("org.eclipse.jdt:ecj:3.26.0")
     api(libs.commons.codec.commons.codec)
     api(libs.commons.io.commons.io)
     api(libs.commons.logging.commons.logging)
@@ -65,6 +70,9 @@ publishing {
 }
 
 tasks.withType<JavaCompile> {
+    javaCompiler = javaToolchains.compilerFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
     options.encoding = "UTF-8"
     options.release = 8
 }
@@ -75,4 +83,16 @@ tasks.withType<Javadoc> {
 
 kotlin {
     jvmToolchain(8)
+}
+
+val runtimeClasspath = configurations.runtimeClasspath
+val desktopJar by tasks.registering(Jar::class) {
+    description = "Builds the executable BCU desktop JAR with its runtime dependencies."
+    group = "build"
+    archiveFileName = "BCU-Animated-Background.jar"
+    manifest.attributes["Main-Class"] = "main.MainBCU"
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(sourceSets.main.map { it.output })
+    from(runtimeClasspath.map { classpath -> classpath.map { zipTree(it) } })
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/INDEX.LIST")
 }

@@ -1,6 +1,7 @@
 package main;
 
 import common.CommonStatic;
+import extension.DesktopExtensions;
 import common.battle.BasisSet;
 import common.io.Backup;
 import common.io.PackLoader.ZipDesc.FileDesc;
@@ -311,6 +312,7 @@ public class MainBCU {
 	public static boolean light = true, nimbus = false, seconds = false, buttonSound = false;
 	public static boolean searchPerKey = false, clickWithinDragWindow = false;
 	public static String author = "";
+	public static volatile String animatedBackgroundPath = "";
 	public static ImageBuilder<BufferedImage> builder;
 	public static boolean announce0510 = false;
 	public static int searchTolerance = 4;
@@ -376,6 +378,8 @@ public class MainBCU {
 		CommonStatic.ctx.initProfile();
 
 		BCUReader.getData$1();
+		LoadPage.prog("loading custom abilities and effects");
+		DesktopExtensions.load(CommonStatic.ctx.getAssetFile("ability").toPath());
 		BattleBox.StageNamePainter.read();
 		loaded = true;
 
@@ -386,6 +390,7 @@ public class MainBCU {
 
 		ast = autoSaveTime > 0 ? new AutoSaveTimer() : null;
 		MainFrame.changePanel(new MainPage());
+		MainFrame.F.restoreAnimatedBackground();
 	}
 
 	public static String validate(String str, char replace) {

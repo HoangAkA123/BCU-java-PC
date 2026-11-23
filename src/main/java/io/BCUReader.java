@@ -96,6 +96,8 @@ public class BCUReader extends DataIO {
 				if(jo.has("author")) {
 					MainBCU.author = jo.get("author").getAsString();
 				}
+				if (jo.has("animated_background") && jo.get("animated_background").isJsonPrimitive())
+					MainBCU.animatedBackgroundPath = jo.get("animated_background").getAsString();
 				if(jo.has("rowlayout")) {
 					CommonStatic.getConfig().twoRow = jo.get("rowlayout").getAsBoolean();
 				}

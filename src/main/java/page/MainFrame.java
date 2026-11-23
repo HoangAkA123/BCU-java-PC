@@ -1,6 +1,7 @@
 package page;
 
 import common.system.P;
+import main.MainBCU;
 import main.Opts;
 import main.Printer;
 import utilpc.PP;
@@ -9,6 +10,7 @@ import javax.swing.*;
 import javax.swing.plaf.FontUIResource;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
 import java.util.Enumeration;
@@ -75,6 +77,8 @@ public class MainFrame extends JFrame {
 			UIManager.put(ks.get(i), fr.get(i));
 	}
 
+	final AnimatedBackground animatedBackground = new AnimatedBackground(this);
+
 	private boolean settingsize = false, changingPanel = false;
 
 	public MainFrame(String ver) {
@@ -99,6 +103,12 @@ public class MainFrame extends JFrame {
 		F = this;
 		changePanel(new LoadPage());
 		Fresized();
+	}
+
+	public void restoreAnimatedBackground() {
+		String path = MainBCU.animatedBackgroundPath;
+		if (!path.isEmpty())
+			SwingUtilities.invokeLater(() -> animatedBackground.load(new File(path), false));
 	}
 
 	public void sizer() {

@@ -5,6 +5,7 @@ import main.MainBCU;
 import main.Opts;
 
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
@@ -30,6 +31,21 @@ public class MenuBarHandler {
 
         bar.add(menu);
         bar.add(history);
+
+        JMenu background = new JMenu("Background");
+        JMenuItem chooseBackground = new JMenuItem("Choose GIF or MP4…");
+        chooseBackground.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setAcceptAllFileFilterUsed(false);
+            chooser.setFileFilter(new FileNameExtensionFilter("Animated backgrounds (*.gif, *.mp4)", "gif", "mp4"));
+            if (chooser.showOpenDialog(MainFrame.F) == JFileChooser.APPROVE_OPTION)
+                MainFrame.F.animatedBackground.load(chooser.getSelectedFile(), true);
+        });
+        JMenuItem clearBackground = new JMenuItem("Clear background");
+        clearBackground.addActionListener(e -> MainFrame.F.animatedBackground.clear());
+        background.add(chooseBackground);
+        background.add(clearBackground);
+        bar.add(background);
 
         int shortcut = Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();
 
