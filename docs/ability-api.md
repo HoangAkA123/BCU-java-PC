@@ -1,6 +1,7 @@
 # API ability và effect cho BCU
 
-API v1 cho phép thêm logic riêng cho mèo và kẻ địch trong pack tùy chỉnh.
+API v1 revision 2 cho phép thêm logic riêng cho mèo và kẻ địch trong pack tùy chỉnh.
+Chỉ cần một JAR API chung; mỗi ability mới gồm Java và icon, không cần build lại BCU nếu dùng các điểm mở rộng bên dưới.
 BCU biên dịch mã nguồn khi khởi động bằng trình biên dịch đi kèm trong JAR.
 File Java chạy với quyền của BCU. Chỉ cài plugin do bạn viết hoặc nhận từ nguồn đáng tin cậy.
 
@@ -129,3 +130,118 @@ ví dụ `"{\"amount\":40}"`.
 
 Build JAR bằng `./gradlew desktopJar` với JDK 21 để biên dịch BCU.
 JAR tạo ra chạy với Java 8 và có trình biên dịch plugin tích hợp.
+
+## Các điểm mở rộng chiến đấu (revision 2)
+
+Giữ `API_VERSION = 1` để tương thích plugin cũ; `API_REVISION = 2` đánh dấu các hàm bổ sung.
+Tất cả callback mới có hành vi mặc định không thay đổi trận đấu.
+
+| Cơ chế | API và thứ tự xử lý |
+| --- | --- |
+| Né, miễn nhiễm cả đòn | `allowHit(Hit)` ở bên nhận, trước xử lý sát thương và proc gốc. Trả `false` bỏ toàn bộ đòn trên mục tiêu đó. |
+| Sát thương | `outgoingDamage`, `incomingDamage`, `onDamaged`, `onHit` giữ nguyên. `Hit.attack.attacker` là nguồn, `Hit.target` là bên nhận. |
+| HP, hồi máu, lá chắn hấp thụ | `healthChange(Context, delta)` điều chỉnh tổng HP thay đổi trong tick, sau giáp và trước kiểm tra ngưỡng knockback. Delta dương hồi máu, âm gây sát thương. `onHealthChanged(Context, previousHealth)` thông báo HP đã thay đổi. |
+| Di chuyển | `movement(Context, distance)` điều chỉnh bước đi tự nguyện sau slow/speed. Khoảng cách có dấu theo trục thế giới, không phải tốc độ. Knockback/Warp vẫn dùng `allowInterruption`. |
+| Tạo/sửa đòn đánh | `beforeAttack(Context, AttackDraft)` sửa sát thương, hai tọa độ thế giới, proc hoặc đặt `cancelled = true`. `index` là slot đòn gốc; `-1` là đòn tạo bằng API. |
+| Trạng thái gốc | `incomingProcs(Hit, Proc)` sửa bản sao các proc trước khi engine áp trạng thái lên mục tiêu. Có thể `procs.STOP.clear()` để bỏ đóng băng mà giữ slow; không ảnh hưởng bản sao của mục tiêu khác. |
+| Trạng thái riêng | `applyEffect`, `removeEffect`, `allowEffect(Context, source, effectId)` hỗ trợ effect thường trực/tạm thời, xếp chồng và miễn nhiễm theo ID. |
+| Hạ gục/hồi sinh | `reviveHealth(Context)` trả HP dương để hồi sinh tức thời khi HP vừa về 0, sau cơ chế sống sót gốc và trước ghi nhận kill. `onRevive` thông báo hồi sinh API hoặc bắt đầu hồi sinh zombie gốc. `onDeath` là chết cuối cùng. |
+| Chọn mục tiêu | `context.targets(radius, allies)` trả snapshot chỉ đọc theo thứ tự trận: cùng phe khi `true`, khác phe khi `false`; có thể gồm chính mình, loại trụ và entity đã chết. |
+| Đánh thêm, đánh lan, phản đòn | `context.attack(damage, from, to, procs)` tạo đòn diện rộng theo hướng của nhân vật, có thể truyền `null` cho proc rỗng. Đòn vào lượt capture kế tiếp, không chen vào danh sách đang được duyệt. |
+| Triệu hồi | `context.summon(Proc.SUMMON)` dùng cơ chế summon gốc: ID, form, cấp/magnification, vị trí, trễ, layer, giới hạn quân, chia sẻ HP. Trả `true` khi đưa được entity vào hàng chờ. |
+| Thanh tẩy | `context.clearStatus(target, Status)` gỡ STOP, SLOW, WEAK, CURSE, SEAL, POISON, ARMOR, SPEED hoặc LETHARGY, kể cả stack nội bộ của weak/poison. `statusTime` đọc số tick còn lại, lớn nhất nếu nhiều stack. |
+| Hẹn giờ | `context.age()` đếm tick riêng của instance; `cooldown(key, ticks)` trả `true` và bắt đầu cooldown nếu đã sẵn sàng. |
+| Hiệu ứng hình ảnh | `onRender(Visual)` vẽ hình RGBA hoặc `FakeImage`; trạng thái animation có thể cập nhật trong `onTick`. |
+
+`context.damage(target, amount)` và `heal(target, amount)` bổ sung overload tác động lên mục tiêu.
+Đây là thay đổi HP trực tiếp qua hàng đợi, chịu giáp và `healthChange`, không đi qua phòng thủ của một đòn đánh,
+không phát `onHit` và không tự cấp kill cho nguồn. Dùng `attack` nếu cần xử lý như đòn đánh gốc.
+Tổng delta qua callback HP được giới hạn trong ±maxHP; HP hồi không vượt maxHP.
+Không hồi entity đã chết bằng `heal`; dùng `reviveHealth` tại thời điểm mất HP.
+
+Các callback chạy theo ID ability đã lưu, rồi theo thứ tự effect được gắn; modifier sau nhận kết quả trước.
+Một callback từ chối hit/interruption/effect là đủ để chặn; hủy `AttackDraft` không thể được callback sau bật lại.
+Hồi sinh dùng callback đầu tiên trả về HP dương. Plugin tự lưu số lần hồi sinh còn lại trong `Behavior`.
+`RuntimeException`/`LinkageError` vô hiệu hóa instance lỗi; kết quả sửa proc/attack lỗi bị bỏ.
+NaN/Infinity trong khoảng cách bị từ chối. Không sao chép proc nếu plugin không sử dụng hook lọc/sửa proc.
+Hàng đợi đòn API giới hạn 256 đòn mỗi lượt capture; summon lồng nhau giới hạn 8 cấp để tránh vòng lặp sinh vô hạn.
+
+## Ví dụ hồi sinh, miễn đóng băng và tăng tốc
+
+Lưu thành `SecondWind.java`, thêm `SecondWind.png` rồi bật trong editor:
+
+```java
+import common.battle.extension.BattleExtension;
+import common.util.Data.Proc;
+import java.util.Arrays;
+import java.util.List;
+
+public class SecondWind implements BattleExtension {
+    public String id() { return "example.second_wind"; }
+    public String name() { return "Second Wind"; }
+    public List<Parameter> parameters() {
+        return Arrays.asList(
+            Parameter.integer("lives", "Số lần hồi sinh", 1, 0, 10),
+            Parameter.integer("hp", "HP hồi (%)", 30, 1, 100)
+        );
+    }
+    public Behavior create(Settings settings) {
+        return new Behavior() {
+            int lives = settings.integer("lives");
+            public void incomingProcs(Hit hit, Proc procs) { procs.STOP.clear(); }
+            public long reviveHealth(Context c) {
+                if (lives == 0) return 0;
+                lives--;
+                return Math.max(1, c.self.maxH * settings.integer("hp") / 100);
+            }
+            public void onRevive(Context c) {
+                c.clearStatus(c.self, Status.SLOW);
+                c.applyEffect(c.self, "example.second_wind.haste", new Behavior() {
+                    public float movement(Context c, float distance) { return distance * 1.5f; }
+                    public void onRender(Visual v) {
+                        v.rectangle(-10, -60, 20, 4, 70, 210, 255, 200);
+                    }
+                }, 90, Stacking.REFRESH);
+            }
+        };
+    }
+}
+```
+
+Ví dụ gọi summon từ `onTick`, `onHit` hoặc `onDeath` (ID phải tồn tại trong dữ liệu đã tải):
+
+```java
+common.util.Data.Proc.SUMMON summon = common.util.Data.Proc.blank().SUMMON;
+summon.id = new common.pack.Identifier<>("000000", common.util.unit.Enemy.class, 0);
+summon.mult = 100; // 100% magnification cho enemy; đối với Unit là cấp
+summon.type.fix_buff = true;
+summon.dis = summon.max_dis = 100;
+summon.time = 30;
+boolean queued = context.summon(summon);
+```
+
+Đặt `type.ignore_limit = true` chỉ khi chủ ý bỏ giới hạn quân của màn.
+Summon không tự tung xác suất: gọi `context.chance(percent)` và `cooldown` trước nếu cần.
+Đòn API cũng dùng giá trị proc đã chọn; ví dụ đặt `STOP.time = 60` sẽ yêu cầu freeze trên đòn đó,
+còn kháng, trait và các điều kiện gốc vẫn do engine xét.
+
+## Giới hạn và kiểm tra
+
+API này bao phủ các nhóm chiến đấu trên, không bảo đảm mọi cơ chế tương lai đều không cần sửa engine.
+`incomingProcs` can thiệp các trạng thái trong `Entity.processProcs`, không tính lại crit, barrier hay các proc
+đã xử lý ở bước sát thương. `beforeAttack` chạy sau chuẩn bị đòn gốc; hủy draft không hoàn tác summon,
+dịch chuyển theo animation hoặc hiệu ứng thời gian đã kích hoạt trong bước chuẩn bị.
+Đòn wave/counter do engine tự sinh không gọi lại `beforeAttack`, nhưng vẫn qua các hook nhận sát thương.
+`movement` không thay thế teleport, burrow hoặc dịch chuyển theo animation.
+Hồi sinh API là tức thời, độc lập Zombie Killer, không tạo hoạt ảnh zombie; việc xóa entity hoặc tự hủy
+trực tiếp không đi qua `reviveHealth`. Base không dùng hồi sinh API.
+
+Plugin là Java có quyền truy cập engine qua `Context.self`/`battle()`; thay đổi trực tiếp các trường gốc
+nằm ngoài bảo đảm của các helper. Không tạo đòn trong `beforeAttack`, không gọi đệ quy lại sự kiện đang xử lý.
+Phản đòn từ `onDamaged` nên có cooldown hoặc bộ đếm để tránh hai phía phản đòn vô tận.
+Không bảo đảm tua ngược/snapshot trận với trạng thái `Behavior` tùy ý; replay từ đầu cần cùng plugin và RNG.
+
+Chạy `JAVA_HOME=/path/to/jdk8 bash scripts/test-ability-api.sh` sau khi build JAR.
+Bộ kiểm tra không cần asset game, kiểm tra các hook nối engine, HP/hồi sinh tức thời, proc riêng từng mục tiêu,
+đòn đánh, di chuyển, cooldown, xử lý plugin lỗi và hàng đợi. Các hoạt ảnh và tổ hợp proc trong trận thật
+cần được thử thêm với pack mà người dùng sử dụng.

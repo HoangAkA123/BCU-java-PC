@@ -20,7 +20,7 @@ public class Anchor implements BattleExtension {
             @Override
             public int outgoingDamage(Hit hit, int damage) {
                 // Apply before BCU processes this hit's own knockback/warp effects.
-                if (hit.context.self.dire != hit.target.dire && hit.attack.atk >= 0) {
+                if (!hit.target.isBase() && hit.context.self.dire != hit.target.dire && hit.attack.atk >= 0) {
                     Behavior anchored = new Behavior() {
                         @Override
                         public boolean allowInterruption(Interruption interruption) {
