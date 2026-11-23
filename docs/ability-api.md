@@ -111,6 +111,13 @@ ví dụ `"{\"amount\":40}"`.
 - `applyEffect` hỗ trợ `REFRESH` (đặt lại thời hạn và giữ trạng thái),
   `REPLACE` (kết thúc các instance cũ và tạo mới) và `STACK` (tạo instance riêng, tối đa 64
   effect tạm thời trên mỗi nhân vật). `removeEffect` gỡ tất cả stack tạm thời của ID.
+- Plugin có thể tạo `Behavior` tạm thời ngay trong file Java và truyền nó vào overload
+  `applyEffect(target, instanceId, behavior, ticks, stacking)`. Cách này phù hợp với effect
+  riêng của một ability và không cần thêm definition hoặc icon thứ hai.
+- `allowInterruption` có thể cho phép hoặc chặn `KNOCKBACK`, `DAMAGE_KNOCKBACK`,
+  `BOSS_WAVE`, `SNIPER` và `WARP`. Dùng `cancelDisplacement` khi effect bắt đầu nếu cần
+  hủy phần dịch chuyển đã được xếp hàng trước đó. Khi callback trả về `false`, sát thương và
+  quy trình hạ gục vẫn được BCU xử lý.
 - `Context` cung cấp nhân vật hiện tại, nguồn gắn hiệu ứng, trạng thái trận, xác suất dùng bộ
   sinh số của trận, hàng đợi thay đổi HP và quyền truy cập các đối tượng chiến đấu gốc.
   `heal` và `damage` đi qua bước xử lý HP tiếp theo của nhân vật.
